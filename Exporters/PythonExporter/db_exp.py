@@ -5,6 +5,17 @@ import argparse
 import datetime
 import shutil
 
+    
+def postgres_connect(config):
+    host = config['postgres']['host']
+    port = config['postgres']['port']
+    database = config['postgres']['database']
+    user = config['postgres']['user']
+    pwd = config['postgres']['pwd']
+    constr = 'user='+user+' host='+host+' dbname='+database+' port='+port+' password='+ pwd
+    conn = psycopg2.connect(constr)
+    return(conn)
+
 def mssql_connect(config):
     host = config['mssql']['host']
     port = config['mssql']['port']
@@ -40,7 +51,7 @@ def oracle_connect(config):
         dsn_tns = cx_Oracle.makedsn(host, port, service_name=service_name)
     else:
         print("ERROR:  oracle sid and service_name not found in config file")
-        exit()
+        exit(-1)
     conn = cx_Oracle.connect(user, pwd, dsn_tns)
 
     return(conn)
@@ -108,6 +119,7 @@ def create_phenotype(conn, phenotype_fname, sql_params, debug):
         cursor.execute(sql['sql'])
         conn.commit()
 
+
 def db_export(conn, sql, csvwriter, arraysize, debug):
     cursor=conn.cursor()
     cursor.arraysize = arraysize
@@ -153,14 +165,14 @@ def db_export_validate(conn, sql, csvwriter, arraysize, debug):
 def test_env(database=None, sftp=None):
     import subprocess
     import sys
-    db_req_packages = {'oracle': 'cx-Oracle', 'mssql': 'pyodbc'} # DB Specific Packages
+    db_req_packages = {'oracle': 'cx-Oracle', 'mssql': 'pyodbc', 'postgres': 'psycopg2'} # DB Specific Packages
     reqs = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze'])
     installed_packages = [r.decode().split('==')[0] for r in reqs.split()]
 
     err_mess = ''
     if database != None: #test db packages
         if database not in db_req_packages:
-            err_mess = err_mess + "Invalid database type, use mssql or oracle\n"
+            err_mess = err_mess + "Invalid database type, use mssql, oracle, or postgres\n"
         else:
             if db_req_packages[database] not in installed_packages:
                 err_mess = err_mess + "Package not installed for database connection: {}\n".format(db_req_packages[database])
@@ -170,6 +182,8 @@ def test_env(database=None, sftp=None):
                 err_mess = err_mess + "Package not installed for sftp: {}\n".format('paramiko')
 
     return(err_mess)
+
+
 
 # get command line args
 clparse = argparse.ArgumentParser(description='Export from DB using formatted SQL file, optionally create n3c_cohort table')
@@ -201,14 +215,14 @@ env_err = test_env(database, sftp_zip)
 if env_err != '':
     print('Failed Initialization Tests')
     print(env_err)
-    exit()
+    exit(-1)
 
 valid_cdm_name = ['pcornet', 'omop', 'act']
 if config['site']['cdm_name'] not in valid_cdm_name:
     print("Invalid cdm_name from config file")
     print("must be one of the values below:")
     print(valid_cdm_name)
-    exit()
+    exit(-1)
 
 # sql params
 sql_params = [
@@ -229,23 +243,26 @@ sql_params = [
     {'tag': '@maxNumShiftDays', 'value': config['site']['max_num_shift_days']}
 ]
 
-db_conn = None
+
 if database == 'oracle':
     import cx_Oracle
     db_conn = oracle_connect(config)
 elif database == 'mssql':
     import pyodbc
     db_conn = mssql_connect(config)
+elif database == 'postgres':
+    import psycopg2
+    db_conn = postgres_connect(config)
 elif database != None:
-    print("Invalid database type, use mssql or oracle")
-    exit()
+    print("Invalid database type, use mssql, oracle, or postgres")
+    exit(-1)
 
 # PHENOTYPE #
 # create phenotype table, n3c_cohort, if option set
 if phenotype_fname != None:
     if db_conn == None:
-        print("Invalid database type, use mssql or oracle")
-        exit()
+        print("Invalid database type, use mssql, oracle, or postgres")
+        exit(-1)
     print("Creating phenotype")
     create_phenotype(db_conn, phenotype_fname, sql_params, debug)
 
@@ -253,8 +270,8 @@ if phenotype_fname != None:
 if sql_fname != None:
     print("Exporting data")
     if db_conn == None:
-        print("Invalid database type, use mssql or oracle")
-        exit()
+        print("Invalid database type, use mssql, oracle, or postgres")
+        exit(-1)
     # put domain data in DATAFILES subdir of output directory
     datafiles_dir = output_dir + os.path.sep + 'DATAFILES'
     # put files below in root output directory
@@ -262,20 +279,20 @@ if sql_fname != None:
     # test for DATAFILES subdir exists
     if not os.path.exists(datafiles_dir):
         print("ERROR: export path not found {}.  You may need to create a 'DATAFILES' subdirectory under your output directory, also may need to specify --output on command line\n".format(datafiles_dir) )
-        exit()
+        exit(-1)
     exports = parse_sql(sql_fname,sql_params)
     for exp in exports:
         if 'output_file' in exp:
             output_file = exp['output_file']
         else:
             print("ERROR: output_file not found in sql block")
-            exit()
+            exit(-1)
         print( "processing output file: {}\n".format(output_file) )
         if output_file in root_files:
             outfname = output_dir + os.path.sep + exp['output_file']
         else:
             outfname = datafiles_dir + os.path.sep + exp['output_file']
-        outf = open(outfname, 'w', newline='')
+        outf = open(outfname, 'w', newline='', encoding='utf-8')
         csvwriter = csv.writer(outf, delimiter='|', quotechar='"', quoting=csv.QUOTE_ALL)
         if exp['validation'] == True:
             val = db_export_validate(db_conn, exp['sql'], csvwriter, arraysize, debug)
@@ -285,7 +302,7 @@ if sql_fname != None:
                 print("Validation ERROR")
                 print("Stopping export")
                 print("See file {}".format(outfname))
-                exit()
+                exit(-1)
         else:
             db_export(db_conn, exp['sql'], csvwriter, arraysize, debug)
         outf.close()
@@ -315,4 +332,3 @@ if sftp_zip == True:
     sftp = paramiko.SFTPClient.from_transport(transport)
     sftp.chdir(config['sftp']['remote_dir'])
     sftp.put(zip_fname,zip_fname)
-

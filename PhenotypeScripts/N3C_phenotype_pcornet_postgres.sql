@@ -2,8 +2,7 @@
 --PCORnet
 
 --Create table to hold all cases and controls before matching
-IF OBJECT_ID('@resultsDatabaseSchema.N3C_PRE_COHORT', 'U') IS NULL 
-	CREATE TABLE @resultsDatabaseSchema.N3C_PRE_COHORT (
+CREATE TABLE IF NOT EXISTS @resultsDatabaseSchema.N3C_PRE_COHORT (
 		patid			VARCHAR(50)  NOT NULL,
 		inc_dx_strong		INT  NOT NULL,
 		inc_dx_weak			INT  NOT NULL,
@@ -18,8 +17,7 @@ IF OBJECT_ID('@resultsDatabaseSchema.N3C_PRE_COHORT', 'U') IS NULL
 	
 	
 --Create table to hold all cases
-IF OBJECT_ID('@resultsDatabaseSchema.N3C_CASE_COHORT', 'U') IS NULL
-	CREATE TABLE @resultsDatabaseSchema.N3C_CASE_COHORT (
+CREATE TABLE IF NOT EXISTS @resultsDatabaseSchema.N3C_CASE_COHORT (
 		patid			VARCHAR(50)  NOT NULL,
 		inc_dx_strong		INT  NOT NULL,
 		inc_dx_weak			INT  NOT NULL,
@@ -29,8 +27,7 @@ IF OBJECT_ID('@resultsDatabaseSchema.N3C_CASE_COHORT', 'U') IS NULL
 
 --Create table to hold control-case matches
 -- DO NOT DROP OR TRUNCATE THIS TABLE
-IF OBJECT_ID('@resultsDatabaseSchema.N3C_CONTROL_MAP', 'U') IS NULL
-	CREATE TABLE @resultsDatabaseSchema.N3C_CONTROL_MAP (
+CREATE TABLE IF NOT EXISTS @resultsDatabaseSchema.N3C_CONTROL_MAP (
 		case_patid   VARCHAR(50) NOT NULL,
 		buddy_num   INT NOT NULL,
 		control_patid VARCHAR(50),
@@ -45,14 +42,12 @@ IF OBJECT_ID('@resultsDatabaseSchema.N3C_CONTROL_MAP', 'U') IS NULL
 	);
 
 --create table to hold all patients
-IF OBJECT_ID('@resultsDatabaseSchema.N3C_COHORT', 'U') IS NULL
-	CREATE TABLE @resultsDatabaseSchema.N3C_COHORT (
+CREATE TABLE IF NOT EXISTS @resultsDatabaseSchema.N3C_COHORT (
 		patid VARCHAR(50) NOT NULL
 	);
 
 -- Create table to hold valid controls before matching
-IF OBJECT_ID('@resultsDatabaseSchema.N3C_PRE_CONTROLS', 'U') IS NULL
-	CREATE TABLE @resultsDatabaseSchema.N3C_PRE_CONTROLS (
+CREATE TABLE IF NOT EXISTS @resultsDatabaseSchema.N3C_PRE_CONTROLS (
 		patid VARCHAR(50)  NOT NULL,
 		maxenc DATE  NOT NULL,
 		minenc DATE  NOT NULL,
@@ -62,8 +57,7 @@ IF OBJECT_ID('@resultsDatabaseSchema.N3C_PRE_CONTROLS', 'U') IS NULL
 	
 
 -- temp table for initial map
-IF OBJECT_ID('@resultsDatabaseSchema.N3C_PRE_MAP', 'U') IS NULL 
-	CREATE TABLE @resultsDatabaseSchema.N3C_PRE_MAP (
+CREATE TABLE IF NOT EXISTS @resultsDatabaseSchema.N3C_PRE_MAP (
 		patid			VARCHAR(50)  NOT NULL,
 		pt_age              VARCHAR(20),
 		sex                 VARCHAR(20),
@@ -74,8 +68,7 @@ IF OBJECT_ID('@resultsDatabaseSchema.N3C_PRE_MAP', 'U') IS NULL
 	);
 	
 -- temp table for control query
-IF OBJECT_ID('@resultsDatabaseSchema.N3C_PENULTIMATE_MAP', 'U') IS NULL
-	CREATE TABLE @resultsDatabaseSchema.N3C_PENULTIMATE_MAP (
+CREATE TABLE IF NOT EXISTS @resultsDatabaseSchema.N3C_PENULTIMATE_MAP (
 		patid varchar(50) NOT NULL,
 		buddy_num int NOT NULL,
 		control_patid varchar(50) NULL,
@@ -94,8 +87,7 @@ IF OBJECT_ID('@resultsDatabaseSchema.N3C_PENULTIMATE_MAP', 'U') IS NULL
 	);
 
 -- temp table for control query
-IF OBJECT_ID('@resultsDatabaseSchema.N3C_FINAL_MAP', 'U') IS NULL
-	CREATE TABLE @resultsDatabaseSchema.N3C_FINAL_MAP (
+CREATE TABLE IF NOT EXISTS @resultsDatabaseSchema.N3C_FINAL_MAP (
 		case_patid varchar(50) NOT NULL,
 		control_patid varchar(50) NULL,
 		buddy_num int NOT NULL,
@@ -112,9 +104,6 @@ IF OBJECT_ID('@resultsDatabaseSchema.N3C_FINAL_MAP', 'U') IS NULL
 		control_race varchar(100) NULL,
 		control_ethn varchar(100) NULL
 	);
-
-
-
 --before beginning, remove any patients from the last run from the PRE cohort and the case table.
 --IMPORTANT: do NOT truncate or drop the control-map table.
 TRUNCATE TABLE @resultsDatabaseSchema.N3C_PRE_COHORT;
@@ -124,6 +113,8 @@ TRUNCATE TABLE @resultsDatabaseSchema.N3C_PRE_CONTROLS;
 TRUNCATE TABLE @resultsDatabaseSchema.N3C_PRE_MAP;
 TRUNCATE TABLE @resultsDatabaseSchema.N3C_PENULTIMATE_MAP;
 TRUNCATE TABLE @resultsDatabaseSchema.N3C_FINAL_MAP;
+
+--Script to populate the pre-cohort table.
 
 --Script to populate the pre-cohort table.
 
@@ -277,7 +268,7 @@ covid_lab as
     FROM 
 		@cdmDatabaseSchema.lab_result_cm
 	WHERE 
-		lab_result_cm.result_date >= CAST('2020-01-01' as datetime)
+		lab_result_cm.result_date >= TO_DATE('2020-01-01','YYYY-MM-DD')
         and 
         (
             lab_result_cm.lab_loinc in (SELECT loinc FROM covid_loinc )
@@ -297,7 +288,7 @@ covid_lab as
 		@cdmDatabaseSchema.lab_result_cm 
 		JOIN covid_pos_list ON LAB_RESULT_CM.RESULT_QUAL = covid_pos_list.word
 	WHERE 
-		lab_result_cm.result_date >= CAST('2020-01-01' as datetime)
+		lab_result_cm.result_date >= TO_DATE('2020-01-01','YYYY-MM-DD')
         and 
         (
             lab_result_cm.lab_loinc in (SELECT loinc FROM covid_loinc )
@@ -315,8 +306,8 @@ covid_diagnosis as
         coalesce(dx_date,admit_date) as best_dx_date,  -- use for later queries
         -- custom dx_category for one ICD-10 code, see phenotype doc
 		case
-			when dx in ('B97.29','B97.21') and coalesce(dx_date,admit_date) < CAST('2020-04-01' as datetime)   then 'dx_strong_positive'
-			when dx in ('B97.29','B97.21') and coalesce(dx_date,admit_date) >= CAST('2020-04-01' as datetime)  then 'dx_weak_positive'
+			when dx in ('B97.29','B97.21') and coalesce(dx_date,admit_date) < TO_DATE('2020-04-01','YYYY-MM-DD')   then 'dx_strong_positive'
+			when dx in ('B97.29','B97.21') and coalesce(dx_date,admit_date) >= TO_DATE('2020-04-01','YYYY-MM-DD')   then 'dx_weak_positive'
 			else dxq.orig_dx_category
 		end as dx_category        
     FROM 
@@ -331,7 +322,7 @@ covid_diagnosis as
         FROM 
 			@cdmDatabaseSchema.diagnosis
 			join covid_dx_codes on diagnosis.dx like covid_dx_codes.dx_code
-		WHERE coalesce(dx_date,admit_date) >= CAST('2020-01-01' as datetime)
+		WHERE coalesce(dx_date,admit_date) >= TO_DATE('2020-01-01','YYYY-MM-DD') 
      ) dxq
  ),
  
@@ -380,7 +371,7 @@ dx_weak as
             from
                 covid_diagnosis
             where
-                dx_category='dx_weak_positive' and best_dx_date <= CAST('2020-05-01' as datetime)
+                dx_category='dx_weak_positive' and best_dx_date <= TO_DATE('2020-05-01','YYYY-MM-DD') 
         ) subq
         group by
             patid,
@@ -405,7 +396,7 @@ dx_weak as
             from
                 covid_diagnosis
             where
-                dx_category='dx_weak_positive' and best_dx_date <= CAST('2020-05-01' as datetime)
+                dx_category='dx_weak_positive' and best_dx_date <= TO_DATE('2020-05-01','YYYY-MM-DD') 
         ) subq
         group by
             patid,
@@ -443,7 +434,6 @@ FROM
 	left outer join covid_lab_pos on covid_cohort.patid = covid_lab_pos.patid          --CHANGE: add new table
 --	left outer join dx_asymp on covid_cohort.patid = dx_asymp.patid                     --CHANGE: no longer need this table
  )
- 
 --EVERYTHING BELOW HERE IS NEW FOR 3.0
 --populate the pre-cohort table
 INSERT INTO @resultsDatabaseSchema.N3C_PRE_COHORT (patid, inc_dx_strong, inc_dx_weak, inc_lab_any, inc_lab_pos, phenotype_version, pt_age, sex, hispanic, race)
@@ -454,32 +444,71 @@ SELECT distinct
     inc_lab_any, 
     inc_lab_pos, 
     '3.2' as phenotype_version,
-    case when floor(datediff(month, d.birth_date, getdate())/12) between 0 and 4 then '0-4'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 5 and 9 then '5-9'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 10 and 14 then '10-14'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 15 and 19 then '15-19'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 20 and 24 then '20-24'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 25 and 29 then '25-29'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 30 and 34 then '30-34'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 35 and 39 then '35-39'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 40 and 44 then '40-44'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 45 and 49 then '45-49'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 50 and 54 then '50-54'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 55 and 59 then '55-59'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 60 and 64 then '60-64'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 65 and 69 then '65-69'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 70 and 74 then '70-74'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 75 and 79 then '75-79'
-        when floor(datediff(month, d.birth_date, getdate())/12) between 80 and 84 then '80-84'
-		when floor(datediff(month, d.birth_date, getdate())/12) between 85 and 89 then '85-89'
-        when floor(datediff(month, d.birth_date, getdate())/12) >= 90 then '90+'
-        end as pt_age,
+   CASE
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 0
+				AND 4
+			THEN '0-4'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 5
+				AND 9
+			THEN '5-9'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 10
+				AND 14
+			THEN '10-14'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 15
+				AND 19
+			THEN '15-19'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 20
+				AND 24
+			THEN '20-24'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 25
+				AND 29
+			THEN '25-29'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 30
+				AND 34
+			THEN '30-34'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 35
+				AND 39
+			THEN '35-39'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 40
+				AND 44
+			THEN '40-44'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 45
+				AND 49
+			THEN '45-49'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 50
+				AND 54
+			THEN '50-54'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 55
+				AND 59
+			THEN '55-59'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 60
+				AND 64
+			THEN '60-64'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 65
+				AND 69
+			THEN '65-69'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 70
+				AND 74
+			THEN '70-74'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 75
+				AND 79
+			THEN '75-79'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 80
+				AND 84
+			THEN '80-84'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) BETWEEN 85
+				AND 89
+			THEN '85-89'
+		WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', d.birth_date) >= 90
+			THEN '90+'
+		END AS pt_age,
         d.sex as sex,
         d.hispanic as hispanic,
         d.race as race
 FROM 
 	cohort c 
 	JOIN @cdmDatabaseSchema.demographic d ON c.patid = d.patid;
+	
 	
 --populate the case table
 INSERT INTO @resultsDatabaseSchema.N3C_CASE_COHORT (patid, inc_dx_strong, inc_dx_weak, inc_lab_any, inc_lab_pos)
@@ -506,7 +535,7 @@ DELETE FROM @resultsDatabaseSchema.N3C_CONTROL_MAP WHERE CASE_PATID NOT IN (SELE
 DELETE FROM @resultsDatabaseSchema.N3C_CONTROL_MAP WHERE CONTROL_PATID NOT IN (SELECT PATID FROM @cdmDatabaseSchema.DEMOGRAPHIC);
 
 --remove cases who no longer meet the phenotype definition
-DELETE FROM @resultsDatabaseSchema.N3C_CONTROL_MAP WHERE CASE_PATID NOT IN (SELECT PATID FROM @resultsDatabaseSchema.N3C_CASE_COHORT);
+DELETE FROM @resultsDatabaseSchema.N3C_CONTROL_MAP WHERE CASE_PATID NOT IN (SELECT PATID FROM @resultsDatabaseSchema.N3C_CASE_COHORT);	
 
 --remove rows with no control_patid match from the last phenotype run
 DELETE FROM @resultsDatabaseSchema.N3C_CONTROL_MAP WHERE CONTROL_PATID IS NULL;
@@ -518,20 +547,19 @@ INSERT INTO @resultsDatabaseSchema.N3C_PRE_CONTROLS (patid, maxenc, minenc, days
 		npc.patid,
 		max(e.ADMIT_DATE) as maxenc,
 		min(e.ADMIT_DATE) as minenc,
-		datediff(day, min(e.ADMIT_DATE), max(e.ADMIT_DATE)) as daysonhand,
-		ABS(CHECKSUM(NEWID())) as randnum -- random number
+		(max(e.ADMIT_DATE)-min(e.ADMIT_DATE)) as daysonhand,
+		RANDOM() AS randnum -- random number
 	from
 		@resultsDatabaseSchema.n3c_pre_cohort npc 
 		JOIN @cdmDatabaseSchema.encounter  e ON npc.patid = e.patid
 	where 
 		inc_lab_any = 1 and inc_dx_strong = 0 and inc_lab_pos = 0 and inc_dx_weak = 0 
-		and e.ADMIT_DATE between '2018-01-01' and getdate()
+		and e.ADMIT_DATE between TO_DATE('2018-01-01','YYYY-MM-DD') and current_date
 		and npc.patid not in (SELECT control_patid FROM @resultsDatabaseSchema.N3C_CONTROL_MAP where control_patid is not null)
 	group by
 		npc.patid
 	having
-		datediff(day, min(e.ADMIT_DATE), max(e.ADMIT_DATE)) >= 10;
-
+		(max(e.ADMIT_DATE)-min(e.ADMIT_DATE)) >= 10;
 		
 -- create pre-map table with random nums
 INSERT INTO @resultsDatabaseSchema.N3C_PRE_MAP (patid, pt_age, sex, race, hispanic, buddy_num, randnum)
@@ -542,7 +570,7 @@ INSERT INTO @resultsDatabaseSchema.N3C_PRE_MAP (patid, pt_age, sex, race, hispan
 		race,
 		hispanic,
 		1 as buddy_num,
-		ABS(CHECKSUM(NEWID())) as randnum -- random number
+		ABS(RANDOM()) AS randnum -- random number
 	from
 		@resultsDatabaseSchema.n3c_pre_cohort
 	where 
@@ -558,13 +586,13 @@ INSERT INTO @resultsDatabaseSchema.N3C_PRE_MAP (patid, pt_age, sex, race, hispan
 		race,
 		hispanic,
 		2 as buddy_num,
-		ABS(CHECKSUM(NEWID())) as randnum -- random number
+		ABS(RANDOM()) AS randnum -- random number
 	from
 		@resultsDatabaseSchema.n3c_pre_cohort
 	where 
     		(inc_dx_strong = 1 or inc_lab_pos = 1 or inc_dx_weak = 1)
 		and patid NOT in (select case_patid from @resultsDatabaseSchema.n3c_control_map where buddy_num=2 and case_patid is not null and control_patid is not null)
-;
+;	
 
 --start progressively matching cases to controls. we will do a diff between the results here and what's already in the control_map table later.
 with
@@ -787,11 +815,13 @@ select
 	penultimate_map.map_2_control_patid,
 	penultimate_map.map_3_control_patid,
 	penultimate_map.map_4_control_patid,
-	floor(datediff(month, demog1.birth_date, getdate())/12) as case_age, 
+	floor((DATE_PART('year', demog1.birth_date) - DATE_PART('year', current_date)) * 12 +
+              (DATE_PART('month', demog1.birth_date) - DATE_PART('month', current_date))) as case_age,
 	demog1.sex as case_sex,
 	demog1.race as case_race,
 	demog1.hispanic as case_ethn,
-	floor(datediff(month ,demog2.birth_date, getdate())/12) as control_age, 
+	floor((DATE_PART('year', demog2.birth_date) - DATE_PART('year', current_date)) * 12 +
+              (DATE_PART('month', demog2.birth_date) - DATE_PART('month', current_date))) as control_age,
 	demog2.sex as control_sex,
 	demog2.race as control_race,
 	demog2.hispanic as control_ethn
@@ -829,3 +859,4 @@ INSERT INTO @resultsDatabaseSchema.N3C_COHORT
     SELECT control_patid
     FROM @resultsDatabaseSchema.N3C_CONTROL_MAP
 	where control_patid is not null;
+	
