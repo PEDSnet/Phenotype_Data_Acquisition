@@ -583,8 +583,8 @@ SELECT PROVIDERID,
    null as PROVIDER_NPI,	--to avoid accidentally identifying sites
    null as PROVIDER_NPI_FLAG,
    null as RAW_PROVIDER_SPECIALTY_PRIMARY
-FROM @cdmDatabaseSchema.PROVIDER
- ;
+FROM @cdmDatabaseSchema.PROVIDER;
+
 --VITAL
 --OUTPUT_FILE: VITAL.csv
 SELECT VITALID,
@@ -625,7 +625,7 @@ SELECT 'ENCOUNTER'  TABLE_NAME,
    AND ADMIT_DATE >= TO_DATE(TO_CHAR(2018,'0000')||'-'||TO_CHAR(01,'00')||'-'||TO_CHAR(01,'00'), 'YYYY-MM-DD')
 UNION 
 SELECT 'CONDITION'  TABLE_NAME,
-   count(*)  ) as ROW_COUNT
+   count(*)  as ROW_COUNT
    FROM @cdmDatabaseSchema.CONDITION 
    JOIN @resultsDatabaseSchema.N3C_COHORT ON CONDITION.PATID = N3C_COHORT.PATID 
    AND REPORT_DATE >= TO_DATE(TO_CHAR(2018,'0000')||'-'||TO_CHAR(01,'00')||'-'||TO_CHAR(01,'00'), 'YYYY-MM-DD')
